@@ -11,7 +11,6 @@ packages:
   - unzip
   - curl
   - docker.io
-  - dnsmasq
 
 write_files:
   # Consul Client Configuration
@@ -110,23 +109,35 @@ write_files:
       [Install]
       WantedBy=multi-user.target
 
-  # DNSMasq configuration to resolve .consul domains
-  - path: /etc/dnsmasq.d/10-consul
-    permissions: '0644'
-    owner: root:root
-    content: |
-      server=/consul/127.0.0.1#8600
 
 runcmd:
+  # Ensure network and DNS are ready
+  - sleep 10
+  - echo "nameserver 8.8.8.8" | tee /etc/resolv.conf.new
+  - echo "nameserver 8.8.4.4" | tee -a /etc/resolv.conf.new
+  - cat /etc/resolv.conf >> /etc/resolv.conf.new
+  - mv /etc/resolv.conf.new /etc/resolv.conf
+  - sleep 5
+  # Test DNS resolution
+  - for i in {1..5}; do ping -c 1 releases.hashicorp.com && break || sleep 5; done
   # Install Consul
   - mkdir -p /etc/consul.d
   - mkdir -p /opt/consul/data
   - cd /tmp
-  - wget -q https://releases.hashicorp.com/consul/1.17.0/consul_1.17.0_linux_arm64.zip
-  - unzip -q consul_1.17.0_linux_arm64.zip
+  - wget https://releases.hashicorp.com/consul/1.17.0/consul_1.17.0_linux_arm64.zip -O consul.zip
+  - unzip consul.zip
   - mv consul /usr/local/bin/
   - chmod +x /usr/local/bin/consul
-  - rm -f consul_1.17.0_linux_arm64.zip
+  - rm -f consul.zip
+  # Install Nomad
+  - mkdir -p /etc/nomad.d
+  - mkdir -p /opt/nomad/data
+  - cd /tmp
+  - wget https://releases.hashicorp.com/nomad/1.7.3/nomad_1.7.3_linux_arm64.zip -O nomad.zip
+  - unzip nomad.zip
+  - mv nomad /usr/local/bin/
+  - chmod +x /usr/local/bin/nomad
+  - rm -f nomad.zip
   # Start Consul first
   - systemctl daemon-reload
   - systemctl enable consul
@@ -138,21 +149,9 @@ runcmd:
   - sleep 5
   - usermod -aG docker nomad
   - systemctl restart docker
-  # Install Nomad
-  - mkdir -p /etc/nomad.d
-  - mkdir -p /opt/nomad/data
-  - cd /tmp
-  - wget -q https://releases.hashicorp.com/nomad/1.7.3/nomad_1.7.3_linux_arm64.zip
-  - unzip -q nomad_1.7.3_linux_arm64.zip
-  - mv nomad /usr/local/bin/
-  - chmod +x /usr/local/bin/nomad
-  - rm -f nomad_1.7.3_linux_arm64.zip
   # Start Nomad after Consul
   - systemctl enable nomad
   - sleep 10
   - systemctl start nomad
-  # Configure DNS
-  - systemctl enable dnsmasq
-  - systemctl restart dnsmasq
 
 final_message: "Consul + Nomad client setup completed after $UPTIME seconds"
