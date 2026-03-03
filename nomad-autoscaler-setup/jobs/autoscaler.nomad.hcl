@@ -10,8 +10,9 @@ job "autoscaler" {
       driver = "docker"
 
       config {
-        image = "hashicorp/nomad-autoscaler:latest"
-        args  = ["agent", "-config", "/local/autoscaler.hcl"]
+        image        = "hashicorp/nomad-autoscaler:latest"
+        args         = ["agent", "-config", "/local/autoscaler.hcl"]
+        network_mode = "host"
       }
 
       template {

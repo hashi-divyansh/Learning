@@ -1,4 +1,10 @@
 ---
+- name: Configure base host resolution
+  hosts: all
+  become: true
+  roles:
+    - base
+
 - name: Configure Nomad servers
   hosts: nomad_servers
   become: true

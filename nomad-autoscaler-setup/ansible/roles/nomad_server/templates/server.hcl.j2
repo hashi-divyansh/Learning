@@ -21,6 +21,12 @@ advertise {
   serf = "{{ '{{ GetPrivateIP }}' }}"
 }
 
+telemetry {
+  publish_allocation_metrics = true
+  publish_node_metrics       = true
+  prometheus_metrics         = true
+}
+
 ui {
   enabled = true
 }

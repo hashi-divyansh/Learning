@@ -4,11 +4,11 @@ job "webapp" {
   type        = "service"
 
   group "web" {
-    count = 2  # Start with 2 tasks
+    count = 1  # Start with 1 tasks
 
     scaling {
       enabled = true
-      min     = 2
+      min     = 1
       max     = 10
 
       policy {
@@ -20,7 +20,7 @@ job "webapp" {
           query  = "avg(nomad_client_allocs_cpu_total_percent{task='web'})"
 
           strategy "target-value" {
-            target = 70  # Scale when CPU > 70%
+            target = 30  # Scale when CPU > 30% just for testing ( to scaler quickly)
           }
         }
       }
