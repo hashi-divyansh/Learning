@@ -1,0 +1,79 @@
+---
+- name: Ensure nomad-autoscaler group exists
+  ansible.builtin.group:
+    name: nomad-autoscaler
+    system: true
+
+- name: Ensure nomad-autoscaler user exists
+  ansible.builtin.user:
+    name: nomad-autoscaler
+    group: nomad-autoscaler
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Ensure nomad-autoscaler directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "0755"
+  loop:
+    - { path: "{{ nomad_autoscaler_config_dir }}", owner: "nomad-autoscaler", group: "nomad-autoscaler" }
+    - { path: "{{ nomad_autoscaler_log_dir }}", owner: "nomad-autoscaler", group: "nomad-autoscaler" }
+
+- name: Copy nomad-autoscaler binary from local machine
+  ansible.builtin.copy:
+    src: "{{ nomad_autoscaler_binary_local }}"
+    dest: "{{ nomad_autoscaler_install_path }}"
+    mode: "0755"
+    owner: root
+    group: root
+  register: binary_copied
+
+- name: Verify nomad-autoscaler binary is executable
+  ansible.builtin.file:
+    path: "{{ nomad_autoscaler_install_path }}"
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Deploy nomad-autoscaler configuration
+  ansible.builtin.template:
+    src: autoscaler.hcl.j2
+    dest: "{{ nomad_autoscaler_config_dir }}/autoscaler.hcl"
+    owner: nomad-autoscaler
+    group: nomad-autoscaler
+    mode: "0640"
+  notify: Restart nomad-autoscaler
+
+- name: Deploy nomad-autoscaler systemd unit
+  ansible.builtin.template:
+    src: nomad-autoscaler.service.j2
+    dest: /etc/systemd/system/nomad-autoscaler.service
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart nomad-autoscaler
+
+- name: Ensure nomad-autoscaler service is enabled and started
+  ansible.builtin.systemd:
+    name: nomad-autoscaler
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Wait for nomad-autoscaler to be running
+  ansible.builtin.wait_for:
+    timeout: 10
+  delegate_to: localhost
+
+- name: Check nomad-autoscaler service status
+  ansible.builtin.systemd:
+    name: nomad-autoscaler
+  register: autoscaler_status
+
+- name: Display nomad-autoscaler status
+  ansible.builtin.debug:
+    msg: "Nomad Autoscaler is {{ autoscaler_status.status.ActiveState }}"

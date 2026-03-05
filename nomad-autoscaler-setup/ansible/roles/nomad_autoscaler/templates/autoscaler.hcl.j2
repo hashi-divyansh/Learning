@@ -1,0 +1,15 @@
+nomad {
+  address = "{{ nomad_server_address }}"
+}
+
+apm "influxdb" {
+  driver = "influxdb"
+  config = {
+    address  = "{{ influxdb_apm_address }}"
+    database = "{{ influxdb_apm_database }}"
+  }
+}
+
+strategy "target-value" {
+  driver = "target-value"
+}

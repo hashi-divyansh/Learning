@@ -1,6 +1,13 @@
 # Nomad Autoscaler Setup with OrbStack
 
-Learn HashiCorp Nomad Autoscaler using OrbStack VMs. Provisions 3 Nomad servers, 3 client nodes, and 1 Prometheus VM using Terraform + Ansible.
+Learn HashiCorp Nomad Autoscaler using OrbStack VMs. Provisions 3 Nomad servers, 3 client nodes, and InfluxDB VM using Terraform + Ansible.
+
+**Features:**
+- Nomad cluster (3 servers + 3 clients) with Consul service discovery
+- Custom-built autoscaler binary (Linux) with InfluxDB/Telegraf APM plugin
+- InfluxDB 1.x for time-series metrics collection
+- Telegraf agents on all nodes collecting system and Docker metrics
+- HAProxy load balancer with dynamic service discovery
 
 ## Quick Start
 
@@ -22,14 +29,16 @@ orb -m server-vm-0 nomad node status
 **Access UIs:**
 - Nomad: http://localhost:4646/ui/jobs
 - Consul: http://server-vm-0.orb.local:8500/ui (Service discovery & health checks)
-- Prometheus: http://localhost:9090/graph
+- InfluxDB API: http://influxdb-vm.orb.local:8086 (Time-series metrics storage)
 - HAProxy Load Balancer Stats: http://client-vm-1.orb.local:1936 (allocated dynamically to client nodes)
 
 ## Test Autoscaling
 
+**Note:** The autoscaler runs as a native systemd service on server-vm-0 using your custom binary with InfluxDB APM plugin.
+
 **Deploy jobs:**
 ```bash
-nomad job run jobs/autoscaler.nomad.hcl
+# The autoscaler is already running as systemd service - no need to run autoscaler.nomad.hcl
 nomad job run jobs/webapp-autoscale.nomad.hcl
 nomad job run jobs/load-balancer.nomad.hcl  # Load balancer with service discovery
 ```
@@ -45,12 +54,33 @@ make load-test WEBAPP_URL=http://localhost:8080
 nomad job status webapp
 # Check registered services in Consul
 curl http://server-vm-0.orb.local:8500/v1/catalog/service/webapp | jq .
+
+# Check autoscaler status and logs
+orb -m server-vm-0 systemctl status nomad-autoscaler
+orb -m server-vm-0 journalctl -u nomad-autoscaler -f
 ```
 
 **View HAProxy stats:**
 ```bash
 # Access HAProxy stats UI (port 1936)
 nomad alloc logs <load-balancer-allocation-id> haproxy
+```
+
+## InfluxDB Metrics Verification
+
+**Check InfluxDB is collecting metrics:**
+```bash
+# List databases
+curl -G 'http://influxdb-vm.orb.local:8086/query' --data-urlencode "q=SHOW DATABASES"
+
+# Query Telegraf metrics (system metrics from all nodes)
+curl -G 'http://influxdb-vm.orb.local:8086/query' --data-urlencode "db=telegraf" --data-urlencode "q=SELECT * FROM cpu LIMIT 5"
+
+# Query Nomad database (used by autoscaler)
+curl -G 'http://influxdb-vm.orb.local:8086/query' --data-urlencode "db=nomad" --data-urlencode "q=SHOW MEASUREMENTS"
+
+# Check Telegraf agent status on any node
+orb -m client-vm-0 systemctl status telegraf
 ```
 
 ## Clean Up
@@ -63,15 +93,26 @@ make destroy
 
 **Project file structure?**
 ```
-nomad-autoscaler-setup-3/
-├── main.tf                      # Terraform config
+nomad-autoscaler-setup/
+├── main.tf                      # Terraform config (VMs: 3 servers, 3 clients, influxdb)
 ├── cloud-init-bootstrap.yaml.tmpl # Minimal SSH + Python bootstrap for all VMs
+├── bin/nomad-autoscaler         # Your custom-built autoscaler binary (Linux) with InfluxDB plugin
 ├── ansible/                     # VM configuration via Ansible
 │   ├── inventory/               # Dynamic inventory generation
 │   ├── playbooks/               # Ansible playbooks
-│   ├── roles/                   # Ansible roles (base, nomad_server, nomad_client, prometheus)
+│   ├── roles/                   # Ansible roles
+│   │   ├── base/                # DNS and host configuration
+│   │   ├── consul/              # Consul servers and clients
+│   │   ├── nomad_server/        # Nomad server setup
+│   │   ├── nomad_client/        # Nomad client + Docker
+│   │   ├── influxdb/            # InfluxDB 1.x time-series database
+│   │   ├── telegraf/            # Telegraf agents for metric collection
+│   │   └── nomad_autoscaler/    # Custom autoscaler as systemd service
 │   └── group_vars/              # Variable definitions
 ├── jobs/                        # Nomad job files
+│   ├── autoscaler.nomad.hcl     # (Not used - autoscaler runs as systemd service)
+│   ├── webapp-autoscale.nomad.hcl # Sample webapp with autoscaling policy
+│   └── load-balancer.nomad.hcl  # HAProxy with Consul service discovery
 └── README.md                    # Quick start guide
 ```
 

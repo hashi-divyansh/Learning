@@ -29,8 +29,26 @@
   roles:
     - nomad_client
 
-- name: Configure Prometheus
-  hosts: prometheus
+- name: Configure InfluxDB
+  hosts: influxdb
   become: true
   roles:
-    - prometheus
+    - influxdb
+
+- name: Configure Telegraf on servers
+  hosts: nomad_servers
+  become: true
+  roles:
+    - telegraf
+
+- name: Configure Telegraf on clients
+  hosts: nomad_clients
+  become: true
+  roles:
+    - telegraf
+
+- name: Configure Nomad Autoscaler
+  hosts: nomad_servers
+  become: true
+  roles:
+    - nomad_autoscaler

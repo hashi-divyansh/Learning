@@ -1,0 +1,21 @@
+[Unit]
+Description=Nomad Autoscaler - Automated scaling for Nomad workloads
+Documentation=https://github.com/hashicorp/nomad-autoscaler
+After=network-online.target nomad.service
+Wants=network-online.target
+Requires=nomad.service
+
+[Service]
+Type=simple
+User=nomad-autoscaler
+Group=nomad-autoscaler
+ExecStart={{ nomad_autoscaler_install_path }} agent -config {{ nomad_autoscaler_config_dir }}/autoscaler.hcl
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nomad-autoscaler
+Restart=on-failure
+RestartSec=5s
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

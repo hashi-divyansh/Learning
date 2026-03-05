@@ -1,0 +1,9 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart nomad-autoscaler
+  ansible.builtin.systemd:
+    name: nomad-autoscaler
+    state: restarted
